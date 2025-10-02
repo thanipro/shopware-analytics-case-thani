@@ -4,7 +4,7 @@ help:
 	@echo "Shopware Analytics - Available Commands"
 	@echo "========================================"
 	@echo "make build        - Build all Docker containers"
-	@echo "make start        - Start all services and show URLs"
+	@echo "make start        - Build and start all services and show URLs"
 	@echo "make up           - Start all services"
 	@echo "make down         - Stop all services"
 	@echo "make logs         - View logs from all services"
@@ -19,6 +19,7 @@ build:
 
 start:
 	@mkdir -p data
+	docker-compose build
 	@docker-compose up -d
 	@echo ""
 	@echo "✓ Services started successfully!"
