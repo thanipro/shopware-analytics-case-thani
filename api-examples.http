@@ -1,0 +1,83 @@
+### Shopware Analytics API Examples
+### Use with REST Client extension in VS Code or IntelliJ HTTP Client
+
+### Variables
+@ingestion_url = http://localhost:8080
+@analytics_url = http://localhost:8000
+
+### Health Check - Ingestion Service
+GET {{ingestion_url}}/v1/health
+
+### Health Check - Analytics Service
+GET {{analytics_url}}/api/health
+
+### Submit Page View Event
+POST {{ingestion_url}}/v1/events
+Content-Type: application/json
+
+{
+  "event_type": "page_view",
+  "timestamp": "2025-10-02T10:30:00Z",
+  "product_id": "prod-123"
+}
+
+### Submit Add to Cart Event
+POST {{ingestion_url}}/v1/events
+Content-Type: application/json
+
+{
+  "event_type": "add_to_cart",
+  "timestamp": "2025-10-02T10:35:00Z",
+  "product_id": "prod-123"
+}
+
+### Submit Purchase Event
+POST {{ingestion_url}}/v1/events
+Content-Type: application/json
+
+{
+  "event_type": "purchase",
+  "timestamp": "2025-10-02T10:40:00Z",
+  "product_id": "prod-123",
+  "order_amount": 99.99
+}
+
+### Submit Multiple Page Views (Different Products)
+POST {{ingestion_url}}/v1/events
+Content-Type: application/json
+
+{
+  "event_type": "page_view",
+  "timestamp": "2025-10-02T11:00:00Z",
+  "product_id": "prod-456"
+}
+
+###
+POST {{ingestion_url}}/v1/events
+Content-Type: application/json
+
+{
+  "event_type": "page_view",
+  "timestamp": "2025-10-02T11:05:00Z",
+  "product_id": "prod-123"
+}
+
+### Get Analytics Dashboard Data
+GET {{analytics_url}}/api/analytics
+
+### Invalid Event Type (Should fail)
+POST {{ingestion_url}}/v1/events
+Content-Type: application/json
+
+{
+  "event_type": "invalid_type",
+  "timestamp": "2025-10-02T12:00:00Z"
+}
+
+### Missing Required Field (Should fail)
+POST {{ingestion_url}}/v1/events
+Content-Type: application/json
+
+{
+  "event_type": "page_view"
+}

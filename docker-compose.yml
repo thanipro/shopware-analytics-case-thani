@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  ingestion:
+    build:
+      context: ./go-ingestion
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_URL=redis:6379
+      - PORT=8080
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  consumer:
+    build:
+      context: ./go-consumer
+      dockerfile: Dockerfile
+    environment:
+      - REDIS_URL=redis:6379
+      - DB_PATH=/data/analytics.db
+    volumes:
+      - ./data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  analytics:
+    build:
+      context: ./php-analytics
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=prod
+      - APP_SECRET=5f8a3e7c9d2b1a4f6e8c3d7b9a2e5f1c
+      - DB_PATH=/data/analytics.db
+    volumes:
+      - ./data:/data
+    depends_on:
+      - consumer
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - analytics
+
+volumes:
+  data:
