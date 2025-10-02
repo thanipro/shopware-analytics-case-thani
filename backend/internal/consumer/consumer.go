@@ -74,7 +74,6 @@ func (c *Consumer) flushBatch(batch []models.Event) {
 		log.Printf("Failed to begin transaction: %v", err)
 		return
 	}
-	defer tx.Rollback()
 
 	stmt, err := tx.Prepare(`
 		INSERT INTO events (event_type, timestamp, product_id, order_amount)
@@ -82,6 +81,7 @@ func (c *Consumer) flushBatch(batch []models.Event) {
 	`)
 	if err != nil {
 		log.Printf("Failed to prepare statement: %v", err)
+		tx.Rollback()
 		return
 	}
 	defer stmt.Close()
@@ -90,12 +90,14 @@ func (c *Consumer) flushBatch(batch []models.Event) {
 		_, err := stmt.Exec(event.EventType, event.Timestamp, event.ProductID, event.OrderAmount)
 		if err != nil {
 			log.Printf("Failed to insert event: %v", err)
+			tx.Rollback()
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
 		log.Printf("Failed to commit transaction: %v", err)
+		tx.Rollback()
 		return
 	}
 
