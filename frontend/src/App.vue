@@ -56,59 +56,57 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'App',
-  data() {
-    return {
-      analytics: {
-        total_page_views: 0,
-        total_add_to_carts: 0,
-        total_purchases: 0,
-        conversion_rate: 0.0,
-        average_purchase_value: 0.0,
-        max_purchase_value: 0.0,
-        min_purchase_value: 0.0,
-        top_product_id: null
-      },
-      loading: true,
-      error: null,
-      lastUpdated: null,
-      intervalId: null
-    }
-  },
-  async mounted() {
-    await this.fetchAnalytics()
-    this.intervalId = setInterval(() => {
-      this.fetchAnalytics()
-    }, 5000)
-  },
-  beforeUnmount() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId)
-    }
-  },
-  methods: {
-    async fetchAnalytics() {
-      try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-        const response = await fetch(`${apiUrl}/api/analytics`)
+<script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+import type { Analytics } from './types'
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
+const analytics = ref<Analytics>({
+  total_page_views: 0,
+  total_add_to_carts: 0,
+  total_purchases: 0,
+  conversion_rate: 0.0,
+  average_purchase_value: 0.0,
+  max_purchase_value: 0.0,
+  min_purchase_value: 0.0,
+  top_product_id: null
+})
 
-        this.analytics = await response.json()
-        this.lastUpdated = new Date().toLocaleTimeString()
-        this.loading = false
-        this.error = null
-      } catch (e) {
-        this.error = `Failed to fetch analytics: ${e.message}`
-        this.loading = false
-      }
+const loading = ref<boolean>(true)
+const error = ref<string | null>(null)
+const lastUpdated = ref<string | null>(null)
+let intervalId: number | undefined
+
+const fetchAnalytics = async (): Promise<void> => {
+  try {
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+    const response = await fetch(`${apiUrl}/api/analytics`)
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
+
+    analytics.value = await response.json()
+    lastUpdated.value = new Date().toLocaleTimeString()
+    loading.value = false
+    error.value = null
+  } catch (e) {
+    error.value = `Failed to fetch analytics: ${(e as Error).message}`
+    loading.value = false
   }
 }
+
+onMounted(async () => {
+  await fetchAnalytics()
+  intervalId = setInterval(() => {
+    fetchAnalytics()
+  }, 5000)
+})
+
+onBeforeUnmount(() => {
+  if (intervalId) {
+    clearInterval(intervalId)
+  }
+})
 </script>
 
 <style scoped>

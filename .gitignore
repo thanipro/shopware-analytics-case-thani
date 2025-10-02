@@ -5,6 +5,8 @@ data/*.db-journal
 # Go
 go-ingestion/analytics-service
 go-consumer/consumer-service
+backend/backend
+backend/vendor/
 *.exe
 *.test
 *.out
@@ -13,6 +15,9 @@ go-consumer/consumer-service
 php-analytics/vendor/
 php-analytics/var/
 php-analytics/.env.local
+analytics/vendor/
+analytics/var/
+analytics/.env.local
 
 # Node
 frontend/node_modules/

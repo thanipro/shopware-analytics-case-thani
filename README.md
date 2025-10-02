@@ -1,105 +1,14 @@
 # Shopware Analytics Case Study
 
-A simplified analytics pipeline for e-commerce platforms, demonstrating event ingestion, stream processing, and real-time analytics aggregation.
-
-## Architecture Overview
-
-```
-┌──────────────┐
-│  E-commerce  │
-└──────┬───────┘
-       │ POST /v1/events
-       ▼
-┌─────────────────────────┐
-│  Go Ingestion Service   │
-│  (Port 8080)            │
-│  - Validates events     │
-│  - Publishes to Redis   │
-└──────┬──────────────────┘
-       │
-       ▼
-┌─────────────────────────┐
-│    Redis Queue          │
-│  Channel: events        │
-└──────┬──────────────────┘
-       │
-       ▼
-┌─────────────────────────┐
-│  Go Consumer Service    │
-│  - Subscribes to Redis  │
-│  - Batches events       │
-│  - Writes to SQLite     │
-└──────┬──────────────────┘
-       │
-       ▼
-┌─────────────────────────┐
-│   SQLite Database       │
-└──────┬──────────────────┘
-       │ Reads
-       ▼
-┌─────────────────────────┐
-│  PHP Analytics Service  │
-│  (Port 8000)            │
-│  - Computes metrics     │
-│  - Serves REST API      │
-└──────┬──────────────────┘
-       │ GET /api/analytics
-       ▼
-┌─────────────────────────┐
-│  Vue.js Frontend        │
-│  (Port 3000)            │
-│  - Displays dashboard   │
-│  - Auto-refreshes       │
-└─────────────────────────┘
-```
+A simple analytics system that tracks e-commerce events and calculates metrics.
 
 ## Quick Start
 
-### Prerequisites
-- Docker & Docker Compose
-- Make (optional, for convenience commands)
-
-### Run with Docker Compose
-
 ```bash
-# Build and start all services
-make build && make up
+# Start everything
+make start
 
-# Or without Make
-docker-compose build
-docker-compose up -d
-```
-
-### Access the Application
-
-- **Frontend Dashboard**: http://localhost:3000
-- **Analytics API**: http://localhost:8000/api/analytics
-- **Ingestion API**: http://localhost:8080/v1/events
-
-### View Logs
-
-```bash
-make logs
-
-# Or
-docker-compose logs -f
-```
-
-### Stop Services
-
-```bash
-make down
-
-# Or
-docker-compose down
-```
-
-## API Examples
-
-### Submit Events
-
-#### Page View
-```bash
+# Submit an event
 curl -X POST http://localhost:8080/v1/events \
   -H "Content-Type: application/json" \
   -d '{
@@ -107,10 +16,102 @@ curl -X POST http://localhost:8080/v1/events \
     "timestamp": "2025-10-02T10:30:00Z",
     "product_id": "prod-123"
   }'
+
+# Get analytics
+curl http://localhost:8000/api/analytics
 ```
 
-#### Add to Cart
+**Services:**
+- Backend (Go): http://localhost:8080
+- Analytics API (PHP): http://localhost:8000
+- Dashboard: http://localhost:3000
+
+## Architecture
+
+```
+┌──────────┐
+│  Client  │
+└────┬─────┘
+     │ POST /v1/events
+     ▼
+┌──────────────────┐
+│  Go Backend      │  Validates → Queue (channel) → Batch write
+│  Port 8080       │
+└─────┬────────────┘
+      │
+      ▼
+┌──────────────────┐
+│  SQLite          │
+└─────┬────────────┘
+      │
+      ▼
+┌──────────────────┐
+│  PHP Analytics   │  Reads DB → Calculates metrics
+│  Port 8000       │
+└─────┬────────────┘
+      │ GET /api/analytics
+      ▼
+┌──────────────────┐
+│  Vue Dashboard   │  Displays + auto-refreshes
+│  Port 3000       │
+└──────────────────┘
+```
+
+### Why Go for ingestion?
+- Handles concurrent requests well (goroutines)
+- Fast event validation
+- Built-in channels for internal queuing (no Redis needed)
+- Batch writes (100 events or 5 seconds) → efficient DB inserts
+
+### Why PHP/Symfony for analytics?
+- Matches Shopware's stack
+- Repository pattern keeps data access clean
+- Easy to test with mocked repositories
+- Good for computing business metrics
+
+### Why separate services?
+- Ingestion optimized for writes
+- Analytics optimized for reads
+- Can scale independently
+- Clear boundaries
+
+## Running Locally (without Docker)
+
+**Backend:**
 ```bash
+cd backend
+go run main.go
+```
+
+**Analytics:**
+```bash
+cd analytics
+composer install
+php -S localhost:8000 -t public
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## API Examples
+
+### Submit Events
+
+```bash
+# Page view
+curl -X POST http://localhost:8080/v1/events \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_type": "page_view",
+    "timestamp": "2025-10-02T10:30:00Z",
+    "product_id": "prod-123"
+  }'
+
+# Add to cart
 curl -X POST http://localhost:8080/v1/events \
   -H "Content-Type: application/json" \
   -d '{
@@ -118,10 +119,8 @@ curl -X POST http://localhost:8080/v1/events \
     "timestamp": "2025-10-02T10:35:00Z",
     "product_id": "prod-123"
   }'
-```
 
-#### Purchase
-```bash
+# Purchase
 curl -X POST http://localhost:8080/v1/events \
   -H "Content-Type: application/json" \
   -d '{
@@ -138,7 +137,7 @@ curl -X POST http://localhost:8080/v1/events \
 curl http://localhost:8000/api/analytics
 ```
 
-**Response:**
+Response:
 ```json
 {
   "total_page_views": 150,
@@ -152,222 +151,67 @@ curl http://localhost:8000/api/analytics
 }
 ```
 
-See `api-examples.http` for more examples.
-
 ## Project Structure
 
 ```
-.
-├── go-ingestion/          # Go service for event ingestion
-│   ├── main.go            # HTTP server + Redis publisher
-│   ├── main_test.go       # Unit tests
-│   ├── go.mod
-│   └── Dockerfile
-├── go-consumer/           # Go service for event processing
-│   ├── main.go            # Redis consumer + SQLite writer
-│   ├── go.mod
-│   └── Dockerfile
-├── php-analytics/         # Symfony service for analytics
-│   ├── src/
-│   │   ├── Controller/    # API controllers
-│   │   └── Service/       # Business logic
-│   ├── tests/             # PHPUnit tests
-│   ├── composer.json
-│   └── Dockerfile
-├── frontend/              # Vue.js dashboard
-│   ├── src/
-│   │   └── App.vue        # Main component
-│   ├── package.json
-│   └── Dockerfile
-├── docs/                  # Architecture documentation
-├── docker-compose.yml     # Multi-service orchestration
-├── Makefile              # Convenience commands
-└── api-examples.http     # API request examples
+backend/              # Go service
+  internal/
+    models/          # Event types
+    database/        # DB setup
+    consumer/        # Queue + batch processing
+    handlers/        # HTTP handlers + tests
+  main.go
+
+analytics/           # Symfony service
+  src/
+    Controller/      # API endpoints
+    Service/         # Business logic
+    Repository/      # Data access (repository pattern)
+    EventSubscriber/ # CORS handling
+  tests/             # PHPUnit tests
+  config/
+    services.yaml    # DI configuration
+
+frontend/            # Vue.js + TypeScript
+  src/
+    App.vue          # Dashboard component
+    types.ts         # TypeScript interfaces
+
+docs/
+  DECISIONS.md       # Why I made certain choices
 ```
 
 ## Running Tests
 
-### All Tests
 ```bash
-make test
-```
+# Go
+cd backend
+go test ./...
 
-### Go Tests Only
-```bash
-make test-go
-# Or
-cd go-ingestion && go test -v ./...
-```
-
-### PHP Tests Only
-```bash
-make test-php
-# Or
-cd php-analytics && composer install && vendor/bin/phpunit
-```
-
-## Key Design Decisions
-
-### Why Go for Ingestion?
-- **High concurrency**: Handles multiple simultaneous event submissions efficiently
-- **Low latency**: Fast response times critical for event tracking
-- **Lightweight**: Minimal resource footprint
-
-### Why Redis Queue?
-- **Decoupling**: Ingestion service doesn't block on database writes
-- **Buffering**: Handles traffic spikes gracefully
-- **Reliability**: Events aren't lost if consumer is temporarily down
-- **Scalability**: Multiple consumers can process events in parallel
-
-### Why Go for Consumer?
-- **Batch processing**: Efficiently batches events for bulk inserts
-- **Long-running**: Designed for background processing
-- **Shared codebase**: Reuses models from ingestion service
-
-### Why PHP/Symfony for Analytics?
-- **Business logic**: Rich ecosystem for complex computations
-- **Matches stack**: Aligns with Shopware's technology choices
-- **Separation of concerns**: Analytics computation separate from event processing
-
-### Why SQLite?
-- **Simplicity**: No external database server needed for demo
-- **Local development**: Easy to run and inspect
-- **Production path**: Same code works with PostgreSQL/MySQL by changing connection string
-
-### Event Schema
-
-```json
-{
-  "event_type": "page_view|add_to_cart|purchase",
-  "timestamp": "2025-10-02T10:30:00Z",
-  "product_id": "prod-123",        // Optional
-  "order_amount": 99.99            // Required for purchases
-}
+# PHP
+cd analytics
+vendor/bin/phpunit
 ```
 
 ## Assumptions & Trade-offs
 
-### Assumptions
-1. **Events are idempotent**: No deduplication logic (for simplicity)
-2. **Single tenant**: No multi-shop separation
-3. **Conversion rate**: Calculated as purchases/page_views (simplified funnel)
-4. **Top product**: Based on page views, not purchases
-5. **Time zone**: All timestamps assumed UTC
+**Assumptions:**
+- Events are unique (no deduplication)
+- Conversion rate = purchases / page_views
+- Top product = most page views (not purchases)
 
-### Trade-offs
-1. **SQLite vs PostgreSQL**
-   - ✅ Simple setup, no external database
-   - ❌ Limited concurrent writes
-   - **Production**: Would use PostgreSQL/MySQL
+**Trade-offs:**
+- SQLite is simple but limited (would use PostgreSQL in production)
+- In-memory queue is fast but not persistent (would use Kafka for real traffic)
+- Batch processing means ~5 second delay (acceptable for analytics)
+- Shared database keeps it simple (would separate in production)
 
-2. **Eventual consistency**
-   - ✅ Fast ingestion response times
-   - ❌ Dashboard may lag 1-5 seconds
-   - **Acceptable**: Analytics don't need real-time guarantees
+## What I'd Change for Production
 
-3. **Batch processing**
-   - ✅ Efficient database writes (100 events or 5 seconds)
-   - ❌ Small delay before events appear in analytics
-   - **Tunable**: Batch size and interval configurable
+**Database:** PostgreSQL with read replicas
+**Queue:** Kafka for persistence
+**Auth:** API keys for event submission
+**Monitoring:** Prometheus + Grafana
+**Scaling:** Multiple backend instances behind load balancer
 
-4. **In-memory batching**
-   - ✅ Fast aggregation
-   - ❌ Events lost if consumer crashes before flush
-   - **Production**: Would use persistent queue (Kafka/SQS)
-
-5. **Shared database file**
-   - ✅ Simple for local development
-   - ❌ Coupling between consumer and analytics
-   - **Production**: Consumer would expose Data Access API
-
-## Local Development (Without Docker)
-
-### 1. Start Redis
-```bash
-redis-server
-```
-
-### 2. Start Go Ingestion
-```bash
-cd go-ingestion
-go run main.go
-```
-
-### 3. Start Go Consumer
-```bash
-cd go-consumer
-go run main.go
-```
-
-### 4. Start PHP Analytics
-```bash
-cd php-analytics
-composer install
-php -S localhost:8000 -t public
-```
-
-### 5. Start Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## Monitoring & Observability
-
-Currently implemented:
-- Health check endpoints (`/v1/health`, `/api/health`)
-- Structured logging in all services
-- Request/response logging
-
-Production additions (see `/docs/observability.md`):
-- Prometheus metrics
-- Distributed tracing (OpenTelemetry)
-- Centralized logging (ELK stack)
-- Alerting (PagerDuty/Slack)
-
-## Scalability Considerations
-
-See `/docs/scalability.md` for detailed discussion.
-
-**Summary**:
-- Replace Redis Pub/Sub with Kafka/Kinesis for persistence
-- Horizontal scaling of ingestion and consumer services
-- Migrate to time-series database (ClickHouse/TimescaleDB)
-- Implement CQRS pattern for read/write separation
-- Add caching layer (Redis) for frequently accessed metrics
-
-## Security Considerations
-
-See `/docs/security.md` for detailed discussion.
-
-Current state: **No authentication** (demo purposes)
-
-Production requirements:
-- API key authentication for event submission
-- Rate limiting per client
-- TLS/HTTPS encryption
-- Input validation and sanitization
-- PII anonymization (IP addresses, user IDs)
-- Secrets management (AWS Secrets Manager)
-
-## Future Improvements
-
-1. **User tracking**: Session-based conversion funnels
-2. **Time-based analytics**: Hourly/daily/weekly aggregations
-3. **Real-time dashboards**: WebSocket updates instead of polling
-4. **Advanced metrics**: Bounce rate, session duration, funnel analysis
-5. **Data retention**: Automated archival of old events
-6. **Multi-tenancy**: Shop-level data isolation
-7. **Export functionality**: CSV/PDF report generation
-8. **Admin interface**: Event inspection, replay, filtering
-
-## License
-
-This is a case study project for Shopware/CtrlAltElite.
-
----
-
-**Built with**: Go (Gin), PHP (Symfony), Vue.js, Redis, SQLite
-**Author**: Oluwaseun Thani
-**Date**: October 2025
+See `/docs` for more details on specific topics.
